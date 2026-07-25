@@ -2,11 +2,6 @@
 
 > A modern, full-stack task management application inspired by Trello. Built with React, TypeScript, Express, PostgreSQL, Redis, and modern web technologies.
 
-![GitHub stars](https://img.shields.io/github/stars/yourusername/taskflow?style=for-the-badge)
-![GitHub forks](https://img.shields.io/github/forks/yourusername/taskflow?style=for-the-badge)
-![GitHub issues](https://img.shields.io/github/issues/yourusername/taskflow?style=for-the-badge)
-![License](https://img.shields.io/github/license/yourusername/taskflow?style=for-the-badge)
-
 ---
 
 ## 📖 Overview
