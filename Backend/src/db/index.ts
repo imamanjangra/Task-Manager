@@ -1,4 +1,4 @@
-import { env } from './../validators/auth.validator.js';
+import { env } from './../validators/env.validator.js';
 import pdg from "pg"
 const {Pool} = pdg;
 // import {env} from "../validators/auth.validator.js"

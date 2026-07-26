@@ -2,7 +2,7 @@ import 'dotenv/config';
 
 import { app } from "./app.js";
 import "./db/index.js";
-import { env } from './validators/auth.validator.js';
+import { env } from './validators/env.validator.js';
 
 const PORT = env.PORT;
 
