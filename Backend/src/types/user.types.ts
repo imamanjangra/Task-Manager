@@ -11,3 +11,4 @@ export interface SafeUser {
     name: string;
     email: string;
 }
+

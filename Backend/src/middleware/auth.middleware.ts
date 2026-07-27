@@ -40,12 +40,16 @@ export const authMiddleware = async (
             });
         }
 
-        // req.user = result.rows[0];
+        req.user = result.rows[0];
 
         next();
     } catch (error) {
-        return res.status(401).json({
-            message: "Invalid or expired token",
-        });
+            if (error instanceof Error) {
+      console.log(error.message);
+
+      res.status(500).json({ message: error.message, stack: error.stack });
+    } else {
+      res.status(500).json({ error: "unknown errro" });
+    }
     }
 };

@@ -39,6 +39,11 @@ export const loginScheme = z.object({
     .min(1 , "must be required")
 }).strict();
 
+export const LogoutSchema = z.object({
+    refresh_token : z
+        .string()
+})
+
 export const UserSchema  = UserRegister.extend({
     id : z.string()
 })
@@ -47,8 +52,11 @@ export const SafeUserSchema = UserSchema.omit({
     password : true
 })
 
+export const updateUserSchema = UserSchema.partial();
 
 export type RegisterBody = z.infer<typeof UserRegister>
 export type LoginBody = z.infer<typeof loginScheme>
 export type ParamsBody = z.infer<typeof paramsvalue>
 export type safeUser = z.infer<typeof SafeUserSchema>
+export type logoutBody = z.infer<typeof LogoutSchema>
+export type updateUserBody = z.infer<typeof updateUserSchema>

@@ -3,12 +3,9 @@ import { email, z } from "zod";
 
 export const AccessTokenPayloadSchema = z.object({
     id : z
-        .coerce
-        .number()
-        .int()
-        .positive(),
+        .string(),
 
     email : z
         .string()
         .email(),
-}).strict()
+})
