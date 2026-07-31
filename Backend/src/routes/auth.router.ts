@@ -5,16 +5,14 @@ import { createUser, googleCallback, googleLogin, Login, Logout, UpdateUser } fr
 import { authMiddleware } from "../middleware/auth.middleware.js";
 
 
-
-
 const router = Router();
 
 router.post(
-    "/register", validate(UserRegister) , createUser
+    "/register", validate({body : UserRegister}) , createUser
 )
 
 router.post(
-    '/login' , validate(loginScheme) , Login
+'/login' , validate({body : loginScheme}) , Login
 )
 
 router.get(
@@ -22,7 +20,7 @@ router.get(
 )
 
 router.patch(
-    "/updateInfo" , validate(updateUserSchema), authMiddleware,   UpdateUser
+    "/updateInfo" , validate({body : updateUserSchema}), authMiddleware,   UpdateUser
 )
 
 // google routes
