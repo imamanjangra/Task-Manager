@@ -1,18 +1,33 @@
-import { ZodType } from "zod";
 import { Request, Response, NextFunction } from "express";
+import { ZodTypeAny } from "zod";
+
+type ValidateSchema = {
+  body?: ZodTypeAny;
+  params?: ZodTypeAny;
+  query?: ZodTypeAny;
+};
 
 export const validate =
-  (schema: ZodType) =>
+  (schemas: ValidateSchema) =>
   (req: Request, res: Response, next: NextFunction) => {
-    const result = schema.safeParse(req.body);
+    try {
+      if (schemas.body) {
+        req.body = schemas.body.parse(req.body);
+      }
 
-    if (!result.success) {
+      if (schemas.params) {
+        req.params = schemas.params.parse(req.params) as any;
+      }
+
+      if (schemas.query) {
+        req.query = schemas.query.parse(req.query) as any;
+      }
+
+      next();
+    } catch (error: any) {
       return res.status(400).json({
         success: false,
-        errors: result.error.flatten(),
+        errors: error.flatten(),
       });
     }
-
-    req.body = result.data;
-    next();
   };
