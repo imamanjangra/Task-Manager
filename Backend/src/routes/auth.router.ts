@@ -1,7 +1,7 @@
 import { Router } from "express";
 import { validate } from "../middleware/Validate.middleware.js";
 import { loginScheme, updateUserSchema, UserRegister } from "../validators/auth.validator.js";
-import { createUser, Login, Logout, UpdateUser } from "../controller/auth.controller.js";
+import { createUser, googleCallback, googleLogin, Login, Logout, UpdateUser } from "../controller/auth.controller.js";
 import { authMiddleware } from "../middleware/auth.middleware.js";
 
 
@@ -22,7 +22,18 @@ router.get(
 )
 
 router.patch(
-    "/updateInfo" ,authMiddleware,   UpdateUser
+    "/updateInfo" , validate(updateUserSchema), authMiddleware,   UpdateUser
 )
 
+// google routes
+
+router.get(
+    "/google",
+    googleLogin
+);
+
+router.get(
+    "/google/callback",
+    googleCallback
+);
 export default router

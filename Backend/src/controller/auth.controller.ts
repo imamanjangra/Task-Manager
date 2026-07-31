@@ -16,6 +16,9 @@ import {
   refreshTokenOptions,
 } from "../utils/cookieOptions.js";
 import { success } from "zod";
+import { googleClient } from "../config/google.js";
+import { env } from "../validators/env.validator.js";
+import { GoogleUserSchema } from "../validators/google.validator.js";
 
 export const createUser = async (
   req: Request<{}, {}, RegisterBody>,
@@ -120,7 +123,15 @@ export const Login = async (
 
      const user = result.rows[0];
 
-    const isMatch = await bcrypt.compare(password, user.password);
+    if (!user.password) {
+      res.status(500).json({
+        success: false,
+        message: "User password is missing",
+      });
+      return;
+    }
+
+    const isMatch = bcrypt.compare(password, user.password);
 
     if (!isMatch) {
        res.status(401).json({
@@ -227,3 +238,202 @@ export const UpdateUser = async (req : Request <{} , {} , updateUserBody>, res :
     }
     }
 }
+
+
+// google auth 
+
+export const googleLogin = async (
+    req: Request,
+    res: Response
+): Promise<void> => {
+    try {
+        const googleUrl = googleClient.generateAuthUrl({
+            access_type: "offline",
+            scope: [
+                "openid",
+                "email",
+                "profile",
+            ],
+            prompt: "select_account",
+        });
+
+        res.redirect(googleUrl);
+    } catch (error) {
+        console.error(error);
+
+        res.status(500).json({
+            success: false,
+            message: "Failed to initialize Google login",
+        });
+    }
+};
+
+export const googleCallback = async (
+    req: Request,
+    res: Response
+): Promise<void> => {
+    try {
+        const { code } = req.query;
+
+        if (typeof code !== "string") {
+            res.status(400).json({
+                success: false,
+                message: "Google authorization code missing",
+            });
+            return;
+        }
+
+        // 1. Exchange authorization code for Google tokens
+        const { tokens } = await googleClient.getToken(code);
+
+        if (!tokens.id_token) {
+            res.status(401).json({
+                success: false,
+                message: "Google ID token missing",
+            });
+            return;
+        }
+
+        // 2. Verify Google's ID token
+        const ticket = await googleClient.verifyIdToken({
+            idToken: tokens.id_token,
+            audience: env.GOOGLE_CLIENT_ID,
+        });
+
+        const payload = ticket.getPayload();
+
+        if (!payload) {
+            res.status(401).json({
+                success: false,
+                message: "Invalid Google user",
+            });
+            return;
+        }
+
+        // 3. Validate Google data with Zod
+        const googleUser = GoogleUserSchema.parse({
+            sub: payload.sub,
+            email: payload.email,
+            name: payload.name,
+            picture: payload.picture,
+        });
+
+        // 4. Find existing Google user
+        const existingUser = await pool.query<User>(
+            `
+            SELECT *
+            FROM users
+            WHERE google_id = $1
+            `,
+            [googleUser.sub]
+        );
+
+        let user: User;
+
+        if (existingUser.rows.length > 0) {
+            user = existingUser.rows[0];
+        } else {
+
+            // 5. Check if email already exists
+            const emailUser = await pool.query<User>(
+                `
+                SELECT *
+                FROM users
+                WHERE email = $1
+                `,
+                [googleUser.email]
+            );
+
+            if (emailUser.rows.length > 0) {
+                res.status(409).json({
+                    success: false,
+                    message:
+                        "An account with this email already exists. Login with your existing account first.",
+                });
+                return;
+            }
+
+            // 6. Create new user
+            const newUser = await pool.query<User>(
+                `
+                INSERT INTO users
+                    (
+                        name,
+                        email,
+                        password,
+                        google_id,
+                        auth_provider
+                    )
+                VALUES
+                    ($1, $2, $3, $4, $5)
+                RETURNING *
+                `,
+                [
+                    googleUser.name,
+                    googleUser.email,
+                    null,
+                    googleUser.sub,
+                    "google",
+                ]
+            );
+
+            user = newUser.rows[0];
+
+            if (!user) {
+                res.status(500).json({
+                    success: false,
+                    message: "Failed to create Google user",
+                });
+                return;
+            }
+        }
+
+        // 7. YOUR JWT
+        const accessToken = generateAccessToken(
+            user.id,
+            user.email
+        );
+
+        const refreshToken = generateRefreshToken(user.id);
+
+        // 8. Store refresh token
+        await pool.query(
+            `
+            UPDATE users
+            SET refresh_token = $1
+            WHERE id = $2
+            `,
+            [refreshToken, user.id]
+        );
+
+        // 9. Safe user
+        const safeUser: SafeUser = {
+            id: user.id,
+            name: user.name,
+            email: user.email,
+        };
+
+        // 10. Set YOUR cookies
+        res
+            .cookie(
+                "accessToken",
+                accessToken,
+                accessTokenOptions
+            )
+            .cookie(
+                "refreshToken",
+                refreshToken,
+                refreshTokenOptions
+            )
+            .redirect("http://localhost:5173");
+
+    } catch (error) {
+        console.error(error);
+
+        res.status(500).json({
+            success: false,
+            message: "Google authentication failed",
+        });
+    }
+};  
+
