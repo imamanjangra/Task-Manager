@@ -1,7 +1,6 @@
 import { Request, Response } from "express";
 import {
   UpdateWorkSpaceBody,
-  WorkSpaceBody,
   WorkspaceParamsBody,
 } from "../validators/workspace.validator.js";
 import { pool } from "../db/index.js";
@@ -20,7 +19,7 @@ export const CreateWorkspace = async (
       `insert into workspaces (name , description  , owner_id) values ($1 , $2 , $3)  RETURNING *`,
       [name, description, user_id],
     );
-
+    await pool.query(`INSERT INTO workspace_members (workspace_id,user_id,role) VALUES ($1,$2,$3) RETURNING *` , [ result.rows[0]?.id , user_id , "owner"])
     res.status(200).json({
       success: true,
       message: "Workshpace created successfully",
