@@ -18,4 +18,3 @@ router.delete("/delete/:id" , authMiddleware , validate( {params:WorkspaceParams
 
 
 export default router
-
