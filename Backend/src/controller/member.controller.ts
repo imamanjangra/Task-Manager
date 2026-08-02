@@ -2,7 +2,7 @@ import { Request, Response } from "express";
 // import { memberCreateBody } from "../validators/member.validator.js";
 import { pool } from "../db/index.js";
 import { membertype } from "../types/member.types.js";
-import { memberParamsBody } from "../validators/member.validator.js";
+import { memberParamsBody, workspaceParamsBody } from "../validators/member.validator.js";
 
 
 export const inviteMember  = async(req : Request <memberParamsBody , {} , membertype> , res : Response):Promise<void> => {
@@ -10,9 +10,6 @@ export const inviteMember  = async(req : Request <memberParamsBody , {} , member
         const {receiver_email , role  } = req.body;
         const user_id = req.user?.id;
         const workspace_id = req.params.id;
-
-
-        
 
         // workspace chek 
         const Workspace_exist = await pool.query(`SELECT id FROM workspaces WHERE id=$1;` , [workspace_id])
@@ -112,7 +109,7 @@ export const request_get = async (req : Request , res : Response):Promise<void> 
         const user_id = req.user?.id;                                                                                                       
         console.log("Workspace router loaded");
         const result = await pool.query<membertype>(`
-                select * from workspace_invitations  JOIN users on users.id = workspace_invitations.sender_id where receiver_id = $1 AND status = $2
+                select * from workspace_invitations where receiver_id = $1 AND status = $2
             ` , [user_id , "pending"])
 
     if (!result.rowCount) {
@@ -136,7 +133,7 @@ export const request_get = async (req : Request , res : Response):Promise<void> 
 }
 
 export const acceptReq = async (
-  req: Request,
+  req: Request<memberParamsBody>,
   res: Response
 ): Promise<void> => {
   const client = await pool.connect();
@@ -247,7 +244,7 @@ export const acceptReq = async (
 };
 
 export const rejectReq = async (
-  req: Request,
+  req: Request<memberParamsBody>,
   res: Response
 ): Promise<void> => {
   try {
@@ -312,7 +309,7 @@ export const rejectReq = async (
 
 
 export const getMembers = async (
-  req: Request,
+  req: Request<workspaceParamsBody>,
   res: Response
 ): Promise<void> => {
 
@@ -372,14 +369,7 @@ export const getMembers = async (
 
     const data = await pool.query(
       `
-      SELECT
-      wm.user_id,
-      wm.role,
-      u.full_name,
-      u.email,
-      u.username,
-      u.profile_picture
-
+      SELECT * 
       FROM workspace_members wm
 
       JOIN users u
@@ -428,7 +418,7 @@ export const getMembers = async (
 
 
 export const leaveWorkspace = async (
-    req: Request,
+    req: Request<workspaceParamsBody>,
     res: Response
 ): Promise<void> => {
 

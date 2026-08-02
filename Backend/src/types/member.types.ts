@@ -6,3 +6,4 @@
         receiver_id : string
         id : string
     }
+    
