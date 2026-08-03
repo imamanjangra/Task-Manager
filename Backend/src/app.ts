@@ -18,8 +18,10 @@ app.use(cookieParser());
 import userRoutes from "./routes/auth.router.js"
 import workspaceRoutes from "./routes/workspace.router.js"
 import member from "./routes/member.router.js"
+import board from "./routes/boards.routes.js"
 app.use('/api/v1/user' , userRoutes)
 app.use('/api/v1/workspace' , workspaceRoutes)
 app.use('/api/v1/member' , member)
+app.use("/api/v1/board" , board)
 
 export {app}    
