@@ -19,9 +19,12 @@ import userRoutes from "./routes/auth.router.js"
 import workspaceRoutes from "./routes/workspace.router.js"
 import member from "./routes/member.router.js"
 import board from "./routes/boards.routes.js"
+import list from "./routes/list.controller.js"
+
 app.use('/api/v1/user' , userRoutes)
 app.use('/api/v1/workspace' , workspaceRoutes)
 app.use('/api/v1/member' , member)
 app.use("/api/v1/board" , board)
+app.use("/api/v1/list" , list)
 
 export {app}    

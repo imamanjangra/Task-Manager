@@ -6,6 +6,7 @@ import {
   updateBoardsBody,
 } from "../validators/board.validator.js";
 import { pool } from "../db/index.js";
+import { checkBoardPermission } from "../helpers/boardPermission.js";
 
 export const createBoard = async (
   req: Request<bordParamsBody, {}, bordBody>,
@@ -155,39 +156,13 @@ export const GetBoardsById = async (
     const id = req.params.id;
     const user_id = req.user?.id;
 
-    const data = await pool.query("select * from boards where id = $1", [id]);
-
-    if (data.rowCount === 0) {
-      res.status(404).json({
-        success: false,
-        message: "Board is not found ",
-      });
-      return;
-    }
-
-    const workspace_id = data.rows[0].workspace_id;
-
-    const role_check = await pool.query(
-      `SELECT role FROM workspace_members WHERE workspace_id=$1 AND user_id=$2`,
-      [workspace_id, user_id],
+    await checkBoardPermission(
+    id,
+    user_id!,
+    ["owner","admin","member"]
     );
 
-    if (role_check.rowCount === 0) {
-      res.status(403).json({
-        success: false,
-        message: "member not found ",
-      });
-      return;
-    }
-    const role = role_check.rows[0].role;
-
-    if (role !== "owner" && role !== "admin" && role !== "member") {
-      res.status(403).json({
-        success: false,
-        message: "you can not get Board ",
-      });
-      return;
-    }
+    const data = await pool.query("select * from boards where id = $1", [id]);
 
     res.status(200).json({
       success: true,
@@ -214,33 +189,13 @@ export const UpdateBoard = async (
     const id = req.params.id;
     const user_id = req.user?.id;
 
-    const Board_check = await pool.query("select * from boards where id = $1", [
-      id,
-    ]);
 
-    if (Board_check.rowCount === 0) {
-      res.status(404).json({
-        success: false,
-        message: "Board is not found ",
-      });
-      return;
-    }
+    await checkBoardPermission(
+    id,
+    user_id!,
+    ["owner","admin"]
+);
 
-    const workspace_id = Board_check.rows[0].workspace_id;
-
-    const role_check = await pool.query(
-      `SELECT role FROM workspace_members WHERE workspace_id=$1 AND user_id=$2`,
-      [workspace_id, user_id],
-    );
-    const role = role_check.rows[0].role;
-
-    if (role !== "owner" && role !== "admin") {
-      res.status(403).json({
-        success: false,
-        message: "you can not update Board ",
-      });
-      return;
-    }
 
     await pool.query(
       `
@@ -277,33 +232,11 @@ export const deleteBoard = async (
     const id = req.params.id;
     const user_id = req.user?.id;
 
-    const Board_check = await pool.query("select * from boards where id = $1", [
-      id,
-    ]);
-
-    if (Board_check.rowCount === 0) {
-      res.status(404).json({
-        success: false,
-        message: "Board is not found ",
-      });
-      return;
-    }
-
-    const workspace_id = Board_check.rows[0].workspace_id;
-
-    const role_check = await pool.query(
-      `SELECT role FROM workspace_members WHERE workspace_id=$1 AND user_id=$2`,
-      [workspace_id, user_id],
-    );
-    const role = role_check.rows[0].role;
-
-    if (role !== "owner" && role !== "admin") {
-      res.status(403).json({
-        success: false,
-        message: "you can not delete Board ",
-      });
-      return;
-    }
+  await checkBoardPermission(
+    id,
+    user_id!,
+    ["owner","admin"]
+);
 
     await pool.query(`delete from boards where id = $1`, [id]);
 
