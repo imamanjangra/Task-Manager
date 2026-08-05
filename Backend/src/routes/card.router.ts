@@ -1,7 +1,7 @@
 import { Router } from "express";
 import { validate } from "../middleware/Validate.middleware.js";
 import { authMiddleware } from "../middleware/auth.middleware.js";
-import { createCard, deleteCard, getAllCards, getCardById, updateCard } from "../controller/card.controller.js";
+import { createCard, deleteCard, getAllCards, getCardById, toggleCardComplete, updateCard } from "../controller/card.controller.js";
 import { cardIdSchema, cardSchema, updateCardSchema } from "../validators/card.validator.js";
 import { listIdParamsSchema } from "../validators/list.validator.js";
 
@@ -14,7 +14,7 @@ router.get("/:list_id" , authMiddleware , validate({ params : listIdParamsSchema
 router.get("/id/:card_id" , authMiddleware , validate({params : cardIdSchema}) , getCardById)
 router.patch("/:card_id" , authMiddleware , validate({params : cardIdSchema , body : updateCardSchema}) , updateCard)
 router.delete("/:card_id" , authMiddleware , validate({params : cardIdSchema }) , deleteCard)
-
+router.patch("/:card_id/toggle-complete", authMiddleware, validate({ params: cardIdSchema }), toggleCardComplete );
 
 
 export default router

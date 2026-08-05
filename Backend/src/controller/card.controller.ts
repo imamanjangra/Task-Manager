@@ -289,3 +289,46 @@ export const deleteCard = async (
     }
   }
 };
+
+export const toggleCardComplete = async (
+    req: Request<CardIdBody>,
+    res: Response
+): Promise<void> => {
+    try {
+
+        const { card_id } = req.params;
+        const user_id = req.user?.id;
+
+        await checkBoardPermission(
+      card_id,
+      user_id!,
+      ["owner", "admin", "member"]
+      );
+
+
+        const data = await pool.query(
+            `
+            UPDATE cards
+            SET is_completed = NOT is_completed
+            WHERE id = $1
+            RETURNING *
+            `,
+            [card_id]
+        );
+
+        res.status(200).json({
+            success: true,
+            card: data.rows[0]
+        });
+
+    } catch (error) {
+
+        if (error instanceof Error) {
+            res.status(500).json({
+                success: false,
+                message: error.message
+            });
+        }
+
+    }
+};
