@@ -1,12 +1,16 @@
-import './App.css'
+import { BrowserRouter, Routes, Route } from "react-router-dom";
+import Login from "@/Pages/Login.tsx";
+import Signup from "./Pages/Signup";
 
-function App() {
+// import Login from "@/pages/Login"
 
+export default function App() {
   return (
-    <>
-     <h1>Welcome to the React App!</h1>
-    </>
-  )
+    <BrowserRouter>
+      <Routes>
+        <Route path="/login" element={<Login />} />
+        <Route path="/signup" element={<Signup />} />
+      </Routes>
+    </BrowserRouter>
+  );
 }
-
-export default App
