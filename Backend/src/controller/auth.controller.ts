@@ -25,7 +25,7 @@ export const createUser = async (
   res: Response,
 ): Promise<void> => {
   try {
-    const { name, email, password } = req.body;
+    const { name, email, password , confirmPassword  } = req.body;
 
     const existingUser = await pool.query<Pick<User, "id">>(
       `
@@ -41,6 +41,14 @@ export const createUser = async (
         success: false,
         message: "User already exists",
       });
+      return;
+    }
+
+    if(password !== confirmPassword){
+      res.status(403).json({
+        success : false,
+        message : "password is not match"
+      })
       return;
     }
 
@@ -92,6 +100,7 @@ export const createUser = async (
         success: true,
         message: "User registered successfully",
         user: safeUser,
+        accessToken 
       });
     return;
   } catch (error) {
@@ -163,7 +172,8 @@ export const Login = async (
       .json({
         success: true,
         message: "Login successful",
-        user: safeUser
+        user: safeUser,
+        accessToken
       });
       return;
   } catch (error) {

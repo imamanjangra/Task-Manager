@@ -16,7 +16,16 @@ export const UserRegister = z.object({
     .min(8 , "minimum 8 character")
     .regex(/[A-Z]/, "Must contain an uppercase letter")
     .regex(/[a-z]/, "Must contain a lowercase letter")
+    .regex(/[0-9]/, "Must contain a number"),
+
+    confirmPassword : z 
+    .string()
+    .min(8 , "minimum 8 character")
+    .regex(/[A-Z]/, "Must contain an uppercase letter")
+    .regex(/[a-z]/, "Must contain a lowercase letter")
     .regex(/[0-9]/, "Must contain a number")
+
+
 }).strict();
 
 

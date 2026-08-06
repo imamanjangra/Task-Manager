@@ -29,10 +29,16 @@ import {
   type SignupSchema,
 } from "@/Schema/auth.schema";
 
+import API from "@/Api/axios";
+import { loginSuccess } from "@/Features/auth/authSlice";
+import { useAppDispatch } from "@/Hooks/Redux.ts";
+// import { useNavigate } from "react-router-dom";
+
 export default function SignupForm() {
   const [showPassword, setShowPassword] = useState(false);
   const [showConfirm, setShowConfirm] = useState(false);
-
+  const dispatch = useAppDispatch();
+  // const navigate = useNavigate();
   const {
     register,
     handleSubmit,
@@ -47,8 +53,22 @@ export default function SignupForm() {
     },
   });
 
-  const onSubmit = (data: SignupSchema) => {
-    console.log(data);
+  const onSubmit = async(data: SignupSchema) => {
+    try {
+       console.log(data);
+    const response = await API.post("/user/register", data);
+      console.log("Signup response:", response.data);
+    dispatch(
+      loginSuccess({
+        user: response.data.user,
+        accessToken: response.data.accessToken,
+      })
+    );
+
+    // navigate("/");
+  } catch (error) {
+    console.error(error);
+  }
   };
 
   return (

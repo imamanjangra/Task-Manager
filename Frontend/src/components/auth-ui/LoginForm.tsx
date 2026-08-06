@@ -22,14 +22,18 @@ import {
 
 import { zodResolver } from "@hookform/resolvers/zod";
 import { useForm } from "react-hook-form";
+
 import {
   loginSchema,
   type LoginSchema,
 } from "@/Schema/auth.schema";
+import API from "@/Api/axios";
+import { loginSuccess } from "@/Features/auth/authSlice";
+import { useAppDispatch } from "@/Hooks/Redux.ts";
 
 export default function LoginForm() {
   const [showPassword, setShowPassword] = useState(false);
-
+  const dispatch = useAppDispatch();
   const {
     register,
     handleSubmit,
@@ -42,8 +46,21 @@ export default function LoginForm() {
     },
   });
 
-  const onSubmit = (data: LoginSchema) => {
-    console.log(data);
+  const onSubmit = async (data: LoginSchema) => {
+    try {
+      console.log(data);
+      console.log(register("email"));
+      const response = await API.post("/user/login", data);
+      console.log("Login response:", response.data);
+      dispatch(
+        loginSuccess({
+          user : response.data.user,
+          accessToken : response.data.accessToken
+        })
+      )
+    } catch (error) {
+      console.error("Login error:", error);
+    }
   };
 
   return (
