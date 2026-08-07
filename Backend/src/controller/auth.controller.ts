@@ -1,6 +1,6 @@
 import type { Request, Response } from "express";
 import bcrypt from "bcryptjs";
-
+import jwt from "jsonwebtoken";
 import type { LoginBody, logoutBody, RegisterBody, updateUserBody } from "../validators/auth.validator.js";
 import type { User, SafeUser } from "../types/user.types.js";
 
@@ -20,6 +20,10 @@ import { googleClient } from "../config/google.js";
 import { env } from "../validators/env.validator.js";
 import { GoogleUserSchema } from "../validators/google.validator.js";
 
+
+interface RefreshTokenPayload {
+  id: number;
+} 
 export const createUser = async (
   req: Request<{}, {}, RegisterBody>,
   res: Response,
@@ -100,7 +104,7 @@ export const createUser = async (
         success: true,
         message: "User registered successfully",
         user: safeUser,
-        accessToken 
+        // accessToken 
       });
     return;
   } catch (error) {
@@ -140,7 +144,7 @@ export const Login = async (
       return;
     }
 
-    const isMatch = bcrypt.compare(password, user.password);
+    const isMatch = await bcrypt.compare(password, user.password);
 
     if (!isMatch) {
        res.status(401).json({
@@ -173,7 +177,7 @@ export const Login = async (
         success: true,
         message: "Login successful",
         user: safeUser,
-        accessToken
+        // accessToken
       });
       return;
   } catch (error) {
@@ -447,3 +451,81 @@ export const googleCallback = async (
     }
 };  
 
+export const refreshAccessToken = async (
+  req: Request,
+  res: Response
+): Promise<void> => {
+  try {
+    const refreshToken = req.cookies.refreshToken;
+
+    if (!refreshToken) {
+      res.status(401).json({
+        success: false,
+        message: "Refresh token missing",
+      });
+      return;
+    }
+
+    let decoded: RefreshTokenPayload;
+
+    try {
+      decoded = jwt.verify(
+        refreshToken,
+        env.REFRESH_TOKEN_SECRET
+      ) as RefreshTokenPayload;
+    } catch {
+      res.status(401).json({
+        success: false,
+        message: "Invalid refresh token",
+      });
+      return;
+    }
+
+    const result = await pool.query<User>(
+      `
+      SELECT *
+      FROM users
+      WHERE id = $1
+      `,
+      [decoded.id]
+    );
+
+    if (result.rows.length === 0) {
+      res.status(404).json({
+        success: false,
+        message: "User not found",
+      });
+      return;
+    }
+
+    const user = result.rows[0];
+
+    if (user.refresh_token !== refreshToken) {
+      res.status(401).json({
+        success: false,
+        message: "Refresh token mismatch",
+      });
+      return;
+    }
+
+    const accessToken = generateAccessToken(
+      user.id,
+      user.email
+    );
+
+    res
+      .cookie("accessToken", accessToken, accessTokenOptions)
+      .status(200)
+      .json({
+        success: true,
+        accessToken,
+      });
+  } catch (error) {
+    console.error(error);
+
+    res.status(500).json({
+      success: false,
+      message: "Internal Server Error",
+    });
+  }
+};

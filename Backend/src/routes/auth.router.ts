@@ -1,7 +1,7 @@
 import { Router } from "express";
 import { validate } from "../middleware/Validate.middleware.js";
 import { loginScheme, updateUserSchema, UserRegister } from "../validators/auth.validator.js";
-import { createUser, googleCallback, googleLogin, Login, Logout, UpdateUser } from "../controller/auth.controller.js";
+import { createUser, googleCallback, googleLogin, Login, Logout, refreshAccessToken, UpdateUser } from "../controller/auth.controller.js";
 import { authMiddleware } from "../middleware/auth.middleware.js";
 
 
@@ -34,4 +34,6 @@ router.get(
     "/google/callback",
     googleCallback
 );
+
+router.post("/refresh-token", refreshAccessToken);
 export default router
