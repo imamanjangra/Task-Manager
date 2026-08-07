@@ -61,7 +61,7 @@ export default function SignupForm() {
     dispatch(
       loginSuccess({
         user: response.data.user,
-        accessToken: response.data.accessToken,
+        // accessToken: response.data.accessToken,
       })
     );
 

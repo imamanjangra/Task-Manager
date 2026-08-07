@@ -3,7 +3,7 @@ import { createSlice ,  type PayloadAction } from "@reduxjs/toolkit";
 
 const initialState: AuthState = {
   user: null,
-  accessToken: null,
+  // accessToken: null,
   isAuthenticated: false,
   loading: false,
 };
@@ -14,15 +14,15 @@ const authSlice = createSlice({
   initialState,
 
   reducers: {
-    loginSuccess: ( state, action: PayloadAction<{ user: User; accessToken: string; }>) => {
+    loginSuccess: ( state, action: PayloadAction<{ user: User;  }>) => {
       state.user = action.payload.user;
-      state.accessToken = action.payload.accessToken;
+      // state.accessToken = action.payload.accessToken;
       state.isAuthenticated = true;
     },
 
     logout: (state) => {
       state.user = null;
-      state.accessToken = null;
+      // state.accessToken = null;
       state.isAuthenticated = false;
     },
 
