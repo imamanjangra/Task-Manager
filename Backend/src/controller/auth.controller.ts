@@ -26,10 +26,6 @@ interface RefreshTokenPayload {
   id: string;
 } 
 
-
-interface RefreshTokenPayload {
-  id: number;
-} 
 export const createUser = async (
   req: Request<{}, {}, RegisterBody>,
   res: Response,
@@ -84,13 +80,13 @@ export const createUser = async (
     const accessToken = generateAccessToken(user.id, user.email);
 
     const refreshToken = generateRefreshToken(user.id);
-
+    const hasedRefreshToken = await bcrypt.hash(refreshToken, 10);
     await tx.user.update({
       where : {
         id : user.id
       },
       data : {
-        refreshTokens : refreshToken
+        refreshTokens : hasedRefreshToken
       }
     })
 
@@ -174,13 +170,14 @@ export const Login = async (
 
     const accessToken = generateAccessToken(user.id, user.email);
     const refreshToken = generateRefreshToken(user.id);
+    const hasedRefreshToken = await bcrypt.hash(refreshToken, 10);
 
      await prisma.user.update({
       where : {
         id : user.id
       },
       data : {
-        refreshTokens : refreshToken
+        refreshTokens : hasedRefreshToken
       }
     })
 
