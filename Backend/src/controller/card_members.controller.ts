@@ -1,7 +1,7 @@
 import { Request, Response } from "express";
 import { checkCardPermission } from "../helpers/cardPremission.js";
-import { card_user_id_Body, CardBody, ListIdBody } from "../validators/card_member.validator.js";
-import { pool } from "../db/index.js";
+import { CardBody, ListIdBody } from "../validators/card_member.validator.js";
+import { prisma } from "../lib/prisma.js";
 
 
 export const AssignMember = async(req : Request<ListIdBody , {} , CardBody> , res : Response):Promise<void> => {
@@ -15,18 +15,15 @@ export const AssignMember = async(req : Request<ListIdBody , {} , CardBody> , re
             card_id,
             assigned_by!,
         );
+        
+        const check = await prisma.card_members.findFirst({
+            where : {
+                cardId : card_id,
+                userId : user_id
+            }
+        })
 
-        const check = await pool.query<card_user_id_Body>(
-            `
-            SELECT *
-            FROM card_members
-            WHERE card_id=$1
-            AND user_id=$2
-            `,
-            [card_id, user_id]
-        );
-
-        if((check.rowCount ?? 0) > 0){
+        if(check){
          res.status(400).json({
             success:false,
             message:"Member already assigned"
@@ -34,11 +31,17 @@ export const AssignMember = async(req : Request<ListIdBody , {} , CardBody> , re
         return;
         }
 
-        const data = await pool.query(`insert into card_members (card_id , assigned_by , user_id) values($1 , $2 , $3) RETURNING *` , [card_id , assigned_by , user_id]);
+        const data = await prisma.card_members.create({
+            data : {
+                cardId : card_id,
+                assignedBy : assigned_by as string,
+                userId : user_id
+            }
+        });
 
         res.status(200).json({
             success : true,
-            card_member : data.rows[0]
+            card_member : data
         })
         return;
 
@@ -54,12 +57,17 @@ export const AssignMember = async(req : Request<ListIdBody , {} , CardBody> , re
 
 export const RemoveMember = async(req : Request<ListIdBody> , res : Response):Promise<void> => {
     try {
-        const id = req.params. card_id;
+        const id = req.params.card_id;
         const user_id = req.user?.id;
 
-        const card = await pool.query(`select * from card_members where id = $1` , [id]);
+    
+        const card = await prisma.card_members.findFirst({
+            where : {
+                id : id
+            }
+        })  
 
-        if(card.rowCount === 0){
+        if(!card){
             res.status(403).json({
                 success : false,
                 message : "card not found"
@@ -67,14 +75,18 @@ export const RemoveMember = async(req : Request<ListIdBody> , res : Response):Pr
         return;
     }
 
-        const card_id = card.rows[0].card_id;
+        const card_id = card.cardId;
         
          await checkCardPermission(
             card_id,
             user_id!,
         );
 
-        await pool.query(`delete from card_members where id=$1` , [id])
+        await prisma.card_members.delete({
+            where : {
+                id : id
+            }
+        })
 
         res.status(200).json({
             success : true,
@@ -101,11 +113,34 @@ export const AssignedMember = async (req : Request<ListIdBody> , res : Response)
             user_id!,
         );
 
-    const data = await pool.query(`select * from card_members where card_id = $1` , [card_id])
+    const data = await prisma.card_members.findMany({
+        where : {
+            cardId : card_id
+        },
+        include : {
+            user : {
+                select : {
+                    id : true,
+                    name : true,
+                    email : true,
+                }
+            },
+
+            card : {
+                select : {
+                    id : true,
+                    name : true,
+                    description : true,
+                    dueDate : true,
+                    iscompleted : true,
+                }
+            }
+        }
+    })
 
     res.status(200).json({
         success : true,
-        card_members : data.rows
+        card_members : data
     })
     return;
 

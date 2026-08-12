@@ -1,5 +1,4 @@
 import { Request, Response } from "express";
-import { pool } from "../db/index.js";
 import { checkBoardPermission } from "../helpers/boardPermission.js";
 import {
   CardBody,
@@ -7,23 +6,28 @@ import {
   ListIdBody,
   CardIdBody,
 } from "../validators/card.validator.js";
+import { prisma } from "../lib/prisma.js";
 
 export const createCard = async (
   req: Request<ListIdBody, {}, CardBody>,
   res: Response
 ): Promise<void> => {
   try {
-    const { title, description, assigned_to, due_date } = req.body;
+    const { title, description, due_date } = req.body;
 
     const list_id = req.params.list_id;
     const user_id = req.user?.id;
 
-    const list = await pool.query(
-      "SELECT board_id FROM lists WHERE id=$1",
-      [list_id]
-    );
+    const list = await prisma.lists.findFirst({
+      where : {
+        id : list_id
+      },
+      select :{
+        boardId : true
+      }
+    })
 
-    if (list.rowCount === 0) {
+    if (list === null) {
       res.status(404).json({
         success: false,
         message: "List not found",
@@ -31,34 +35,27 @@ export const createCard = async (
       return;
     }
 
-    const board_id = list.rows[0].board_id;
+    const board_id = list.boardId;
 
     await checkBoardPermission(
       board_id,
       user_id!,
-      ["owner", "admin", "member"]
+      ["OWNER", "ADMIN", "USER"]
     );
 
-    const data = await pool.query(
-      `
-      INSERT INTO cards
-      (list_id,title,description,created_by,assigned_to,due_date)
-      VALUES($1,$2,$3,$4,$5,$6)
-      RETURNING *
-      `,
-      [
-        list_id,
-        title,
-        description ?? null,
-        user_id,
-        assigned_to ?? null,
-        due_date ?? null,
-      ]
-    );
+    const data = await prisma.cards.create({
+      data : {
+        listId : list_id,
+        name : title, 
+        description : description ?? null,
+        createdBy : user_id as string,                                      
+        dueDate : due_date ?? null
+      }
+    })
 
     res.status(201).json({
       success: true,
-      Card: data.rows[0],
+      Card: data,
     });
   } catch (error) {
     if (error instanceof Error) {
@@ -79,12 +76,16 @@ export const getAllCards = async (
     const list_id = req.params.list_id;
     const user_id = req.user?.id;
 
-    const list = await pool.query(
-      "SELECT board_id FROM lists WHERE id=$1",
-      [list_id]
-    );
+    const list = await prisma.lists.findFirst({
+      where : {
+        id : list_id
+      },
+      select : {
+        boardId : true
+      }
+    })
 
-    if (list.rowCount === 0) {
+    if (list === null) {
       res.status(404).json({
         success: false,
         message: "List not found",
@@ -92,22 +93,22 @@ export const getAllCards = async (
       return;
     }
 
-    const board_id = list.rows[0].board_id;
+    const board_id = list.boardId;
 
     await checkBoardPermission(
       board_id,
       user_id!,
-      ["owner", "admin", "member"]
+      ["OWNER", "ADMIN", "USER"]
     );
 
-    const cards = await pool.query(
-      "SELECT * FROM cards WHERE list_id=$1 ORDER BY created_at ASC",
-      [list_id]
-    );
-
+    const card = await prisma.cards.findMany({
+      where : {
+        listId : list_id
+      }
+    })
     res.status(200).json({
       success: true,
-      Cards: cards.rows,
+      Cards: card,
     });
   } catch (error) {
     if (error instanceof Error) {
@@ -128,18 +129,20 @@ export const getCardById = async (
     const card_id = req.params.card_id;
     const user_id = req.user?.id;
 
-    const card = await pool.query(
-      `
-      SELECT c.*,l.board_id
-      FROM cards c
-      JOIN lists l
-      ON c.list_id=l.id
-      WHERE c.id=$1
-      `,
-      [card_id]
-    );
+    const card = await prisma.cards.findFirst({
+      where : {
+        id : card_id
+      },
+      include : {
+        list : {
+          select : {
+            boardId : true
+          }
+        }
+      }
+    })
 
-    if (card.rowCount === 0) {
+    if (card === null) {
       res.status(404).json({
         success: false,
         message: "Card not found",
@@ -148,14 +151,14 @@ export const getCardById = async (
     }
 
     await checkBoardPermission(
-      card.rows[0].board_id,
+      card.list.boardId,
       user_id!,
-      ["owner", "admin", "member"]
+      ["OWNER", "ADMIN", "USER"]
     );
 
     res.status(200).json({
       success: true,
-      Card: card.rows[0],
+      Card: card,
     });
   } catch (error) {
     if (error instanceof Error) {
@@ -175,20 +178,21 @@ export const updateCard = async (
     const card_id = req.params.card_id;
     const user_id = req.user?.id;
 
-    const { title, description, assigned_to, due_date } = req.body;
+    const { title, description, due_date } = req.body;
 
-    const card = await pool.query(
-      `
-      SELECT c.*,l.board_id
-      FROM cards c
-      JOIN lists l
-      ON c.list_id=l.id
-      WHERE c.id=$1
-      `,
-      [card_id]
-    );
-
-    if (card.rowCount === 0) {
+      const card = await prisma.cards.findFirst({
+        where : {
+          id : card_id
+        },
+        include : {
+          list : {
+            select : {
+              boardId : true
+            }
+          }
+        }
+      })
+    if (card === null) {
       res.status(404).json({
         success: false,
         message: "Card not found",
@@ -197,35 +201,26 @@ export const updateCard = async (
     }
 
     await checkBoardPermission(
-      card.rows[0].board_id,
+      card.list.boardId,
       user_id!,
-      ["owner", "admin", "member"]
+      ["OWNER", "ADMIN", "USER"]
     );
 
-    const data = await pool.query(
-      `
-      UPDATE cards
-      SET
-      title=COALESCE($1,title),
-      description=COALESCE($2,description),
-      assigned_to=COALESCE($3,assigned_to),
-      due_date=COALESCE($4,due_date),
-      updated_at=NOW()
-      WHERE id=$5
-      RETURNING *
-      `,
-      [
-        title ?? null,
-        description ?? null,
-        assigned_to ?? null,
-        due_date ?? null,
-        card_id,
-      ]
-    );
+
+    const data = await prisma.cards.update({
+      where : {
+        id : card_id
+      },
+      data : {
+        name : title ?? undefined,
+        description : description ?? undefined,
+        dueDate : due_date ?? undefined
+      }
+    })
 
     res.status(200).json({
       success: true,
-      Card: data.rows[0],
+      Card: data,
     });
   } catch (error) {
     if (error instanceof Error) {
@@ -246,18 +241,20 @@ export const deleteCard = async (
     const card_id = req.params.card_id;
     const user_id = req.user?.id;
 
-    const card = await pool.query(
-      `
-      SELECT c.*,l.board_id
-      FROM cards c
-      JOIN lists l
-      ON c.list_id=l.id
-      WHERE c.id=$1
-      `,
-      [card_id]
-    );
+    const card = await prisma.cards.findFirst({
+      where: {
+        id: card_id
+      },
+      include: {
+        list: {
+          select: {
+            boardId: true
+          }
+        }
+      }
+    });
 
-    if (card.rowCount === 0) {
+    if (card === null) {
       res.status(404).json({
         success: false,
         message: "Card not found",
@@ -266,15 +263,16 @@ export const deleteCard = async (
     }
 
     await checkBoardPermission(
-      card.rows[0].board_id,
+      card.list.boardId,
       user_id!,
-      ["owner", "admin", "member"]
+      ["OWNER", "ADMIN", "USER"]
     );
 
-    await pool.query(
-      "DELETE FROM cards WHERE id=$1",
-      [card_id]
-    );
+    await prisma.cards.delete({
+      where: {
+        id: card_id
+      }
+    });
 
     res.status(200).json({
       success: true,
@@ -302,23 +300,24 @@ export const toggleCardComplete = async (
         await checkBoardPermission(
       card_id,
       user_id!,
-      ["owner", "admin", "member"]
+      ["OWNER", "ADMIN", "USER"]
       );
 
 
-        const data = await pool.query(
-            `
-            UPDATE cards
-            SET is_completed = NOT is_completed
-            WHERE id = $1
-            RETURNING *
-            `,
-            [card_id]
-        );
+        const data = await prisma.cards.update({
+          where: {
+            id: card_id
+          },
+          data: {
+            isCompleted: {
+              not: undefined
+            }
+          }
+        });
 
         res.status(200).json({
             success: true,
-            card: data.rows[0]
+            card: data
         });
 
     } catch (error) {

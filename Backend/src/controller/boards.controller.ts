@@ -5,25 +5,25 @@ import {
   bordUserIdBody,
   updateBoardsBody,
 } from "../validators/board.validator.js";
-import { pool } from "../db/index.js";
 import { checkBoardPermission } from "../helpers/boardPermission.js";
+import { prisma } from "../lib/prisma.js";
 
 export const createBoard = async (
   req: Request<bordParamsBody, {}, bordBody>,
   res: Response,
 ): Promise<void> => {
   try {
-    const { name, description } = req.body;
+    const { name, description , image_url } = req.body;
     const workspace_id = req.params.workspace_id;
     const user_id = req.user?.id;
 
-    //workspace check
-    const workspace_check = await pool.query(
-      "select * from workspaces where id = $1",
-      [workspace_id],
-    );
+    const workspace_check = await prisma.workspaces.findUnique({
+      where : {
+        id : workspace_id
+      }
+    })
 
-    if (workspace_check.rowCount === 0) {
+    if (workspace_check === null) {
       res.status(404).json({
         success: false,
         message: "Workspace is not found ",
@@ -31,13 +31,14 @@ export const createBoard = async (
       return;
     }
 
-    // role check
-    const role_check = await pool.query(
-      `SELECT role FROM workspace_members WHERE workspace_id=$1 AND user_id=$2`,
-      [workspace_id, user_id],
-    );
-
-    if (role_check.rowCount === 0) {
+    const role_check = await prisma.workspace_members.findFirst({
+      where : {
+        workspaceId : workspace_id,
+        userId : user_id
+      }
+    })
+    
+    if (role_check === null) {
       res.status(403).json({
         success: false,
         message: "member not found ",
@@ -45,9 +46,9 @@ export const createBoard = async (
       return;
     }
 
-    const role = role_check.rows[0].role;
+    const role = role_check.role;
 
-    if (role !== "owner" && role !== "admin") {
+    if (role !== "OWNER" && role !== "ADMIN") {
       res.status(403).json({
         success: false,
         message: "you can not create a Board ",
@@ -55,14 +56,20 @@ export const createBoard = async (
       return;
     }
 
-    const data = await pool.query(
-      `insert into boards (workspace_id , name, description , created_by) values($1 , $2 , $3 , $4) RETURNING *`,
-      [workspace_id, name, description, user_id],
-    );
+    const data = await prisma.boards.create({
+      data : {
+        workspaceId : workspace_id,
+        name : name,
+        description : description,
+        createdBy : user_id!,
+        image_url : image_url ?? undefined
+      }
+    })
+    
 
     res.status(200).json({
       success: true,
-      Board: data.rows[0],
+      Board: data,
     });
     return;
   } catch (error) {
@@ -83,12 +90,13 @@ export const GetAllBoards = async (
     const workspace_id = req.params.workspace_id;
     const user_id = req.user?.id;
 
-    const workspace_check = await pool.query(
-      "select id from workspaces where id = $1",
-      [workspace_id],
-    );
+    const workspace_check = await prisma.workspaces.findUnique({
+      where : {
+        id : workspace_id
+      }
+    });
 
-    if (workspace_check.rowCount === 0) {
+    if (workspace_check === null) {
       res.status(404).json({
         success: false,
         message: "Workspace is not found ",
@@ -96,12 +104,15 @@ export const GetAllBoards = async (
       return;
     }
 
-    const role_check = await pool.query(
-      `SELECT role FROM workspace_members WHERE workspace_id=$1 AND user_id=$2`,
-      [workspace_id, user_id],
-    );
+    const role_check = await prisma.workspace_members.findFirst({
+      where : {
+        workspaceId : workspace_id,
+        userId : user_id
+      }
+    });
+    
 
-    if (role_check.rowCount === 0) {
+    if (role_check === null) {
       res.status(403).json({
         success: false,
         message: "member not found ",
@@ -109,9 +120,9 @@ export const GetAllBoards = async (
       return;
     }
 
-    const role = role_check.rows[0].role;
+    const role = role_check.role;
 
-    if (role !== "member" && role !== "admin" && role !== "owner") {
+    if (role !== "USER" && role !== "ADMIN" && role !== "OWNER") {
       res.status(403).json({
         success: false,
         message: "You have not premistion to see this Board",
@@ -120,12 +131,13 @@ export const GetAllBoards = async (
       return;
     }
 
-    const data = await pool.query(
-      `select * from boards where workspace_id = $1`,
-      [workspace_id],
-    );
+    const data = await prisma.boards.findMany({
+      where : {
+        workspaceId : workspace_id
+      }
+    });
 
-    if (data.rowCount === 0) {
+    if (data.length === 0) {
       res.status(404).json({
         success: false,
         message: "Board not found",
@@ -135,7 +147,7 @@ export const GetAllBoards = async (
 
     res.status(200).json({
       success: true,
-      Boards: data.rows,
+      Boards: data,
     });
     return;
   } catch (error) {
@@ -159,14 +171,18 @@ export const GetBoardsById = async (
     await checkBoardPermission(
     id,
     user_id!,
-    ["owner","admin","member"]
+    ["OWNER","ADMIN","USER"]
     );
 
-    const data = await pool.query("select * from boards where id = $1", [id]);
+    const data = await prisma.boards.findUnique({
+      where : {
+        id : id
+      }
+    });
 
     res.status(200).json({
       success: true,
-      Board: data.rows[0],
+      Board: data,
     });
 
     return;
@@ -193,20 +209,19 @@ export const UpdateBoard = async (
     await checkBoardPermission(
     id,
     user_id!,
-    ["owner","admin"]
+    ["OWNER","ADMIN"]
 );
 
 
-    await pool.query(
-      `
-  UPDATE boards
-  SET
-    name = COALESCE($1, name),
-    description = COALESCE($2, description)
-  WHERE id = $3
-  `,
-      [name ?? null, description ?? null, id],
-    );
+  await prisma.boards.update({
+    where : {
+      id : id
+    },
+    data : {
+      name : name ?? undefined,
+      description : description ?? undefined
+    }
+  })
 
     res.status(200).json({
       success: true,
@@ -235,10 +250,14 @@ export const deleteBoard = async (
   await checkBoardPermission(
     id,
     user_id!,
-    ["owner","admin"]
+    ["OWNER","ADMIN"]
 );
 
-    await pool.query(`delete from boards where id = $1`, [id]);
+    await prisma.boards.delete({
+      where : {
+        id : id
+      }
+    });
 
     res.status(200).json({
         success : true,

@@ -30,8 +30,9 @@ import {
 import API from "@/Api/axios";
 import { loginSuccess } from "@/Features/auth/authSlice";
 import { useAppDispatch } from "@/Hooks/Redux.ts";
-
+import { useNavigate } from "react-router-dom";
 export default function LoginForm() {
+  const navigate = useNavigate()
   const [showPassword, setShowPassword] = useState(false);
   const dispatch = useAppDispatch();
   const {
@@ -54,10 +55,11 @@ export default function LoginForm() {
       console.log("Login response:", response.data);
       dispatch(
         loginSuccess({
-          user : response.data.user,
-          accessToken : response.data.accessToken
+          user : response.data.user
+          // accessToken : response.data.accessToken
         })
       )
+      navigate("/workspaces");
     } catch (error) {
       console.error("Login error:", error);
     }
