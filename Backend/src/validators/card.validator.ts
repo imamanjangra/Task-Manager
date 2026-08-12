@@ -11,10 +11,6 @@ export const cardSchema = z.object({
     .max(1000, "Description is too long")
     .optional(),
 
-  assigned_to: z
-    .uuid()
-    .optional(),
-
   due_date: z
     .string()
     .datetime()

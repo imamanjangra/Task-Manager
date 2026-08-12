@@ -1,10 +1,10 @@
 import type { Request, Response } from "express";
 import bcrypt from "bcryptjs";
+import { prisma } from "../lib/prisma.js";
 
-import type { LoginBody, logoutBody, RegisterBody, updateUserBody } from "../validators/auth.validator.js";
-import type { User, SafeUser } from "../types/user.types.js";
+import type { LoginBody, RegisterBody, updateUserBody } from "../validators/auth.validator.js";
+import type {  SafeUser } from "../types/user.types.js";
 
-import { pool } from "../db/index.js";
 
 import {
   generateAccessToken,
@@ -15,7 +15,6 @@ import {
   accessTokenOptions,
   refreshTokenOptions,
 } from "../utils/cookieOptions.js";
-import { success } from "zod";
 import { googleClient } from "../config/google.js";
 import { env } from "../validators/env.validator.js";
 import { GoogleUserSchema } from "../validators/google.validator.js";
@@ -27,16 +26,13 @@ export const createUser = async (
   try {
     const { name, email, password , confirmPassword  } = req.body;
 
-    const existingUser = await pool.query<Pick<User, "id">>(
-      `
-            SELECT id
-            FROM users
-            WHERE email = $1
-            `,
-      [email],
-    );
+    const existingUser = await prisma.user.findMany({
+      where : {
+        email : email
+      }
+    })
 
-    if (existingUser.rows.length > 0) {
+    if (existingUser.length > 0) {
       res.status(409).json({
         success: false,
         message: "User already exists",
@@ -54,16 +50,17 @@ export const createUser = async (
 
     const hashedPassword = await bcrypt.hash(password, 10);
 
-    const result = await pool.query<User>(
-      `
-            INSERT INTO users (name, email, password)
-            VALUES ($1, $2, $3)
-            RETURNING *
-            `,
-      [name, email, hashedPassword],
-    );
+    const data = await prisma.$transaction(async (tx) => {
 
-    const user = result.rows[0];
+        const result = await tx.user.create({
+      data : {
+        name : name,
+        email : email,
+        password : hashedPassword
+      }
+    })
+
+    const user = result;
 
     if (!user) {
       res.status(500).json({
@@ -77,30 +74,41 @@ export const createUser = async (
 
     const refreshToken = generateRefreshToken(user.id);
 
-    await pool.query(
-      `
-            UPDATE users
-            SET refresh_token = $1
-            WHERE id = $2
-            `,
-      [refreshToken, user.id],
-    );
+    await tx.user.update({
+      where : {
+        id : user.id
+      },
+      data : {
+        refreshTokens : refreshToken
+      }
+    })
+
+    return { user, accessToken, refreshToken };
+    })
+
+    if(!data){
+      res.status(500).json({
+        success: false,
+        message: "User creation failed"
+      });
+      return;
+    }
 
     const safeUser: SafeUser = {
-      id: user.id,
-      name: user.name,
-      email: user.email,
+      id: data.user.id,
+      name: data.user.name,
+      email: data.user.email,
     };
 
     res
-      .cookie("accessToken", accessToken, accessTokenOptions)
-      .cookie("refreshToken", refreshToken, refreshTokenOptions)
+      .cookie("accessToken", data.accessToken, accessTokenOptions)
+      .cookie("refreshToken", data.refreshToken, refreshTokenOptions)
       .status(201)
       .json({
         success: true,
         message: "User registered successfully",
         user: safeUser,
-        accessToken 
+        accessToken: data.accessToken
       });
     return;
   } catch (error) {
@@ -121,16 +129,18 @@ export const Login = async (
   try {
     const { email, password } = req.body;
 
-    const result = await pool.query<User>(`select * from users where email=$1`, [
-      email,
-    ]);
+    const result = await prisma.user.findMany({
+      where : {
+        email : email
+      }
+    })
 
-    if (result.rows.length == 0) {
+    if (result.length == 0) {
       res.status(404).json({ success: false, message: "User not found" });
       return;
     }
 
-     const user = result.rows[0];
+     const user = result[0];
 
     if (!user.password) {
       res.status(500).json({
@@ -154,10 +164,14 @@ export const Login = async (
     const accessToken = generateAccessToken(user.id, user.email);
     const refreshToken = generateRefreshToken(user.id);
 
-     await pool.query("UPDATE users SET refresh_token = $1 WHERE id = $2", [
-      refreshToken,
-      user.id,
-    ]);
+     await prisma.user.update({
+      where : {
+        id : user.id
+      },
+      data : {
+        refreshTokens : refreshToken
+      }
+    })
 
      const safeUser: SafeUser = {
       id: user.id,
@@ -192,10 +206,15 @@ export const Logout = async (req : Request , res : Response):Promise<void> => {
         const refreshToken = req.cookies?.refreshToken;
 
     if (refreshToken) {
-      await pool.query<logoutBody>(
-        `update users set refresh_token = null where refresh_token = $1`,
-        [refreshToken],
-      );
+
+      await prisma.user.updateMany({
+        where : {
+          refreshTokens : refreshToken
+        },
+        data : {
+          refreshTokens : null
+        }
+      })
     }
 
      res
@@ -230,13 +249,18 @@ export const UpdateUser = async (req : Request <{} , {} , updateUserBody>, res :
             return
         }
 
-         await pool.query<updateUserBody>(
-            `UPDATE users set name = $1 where id = $2` , [name , user_id]
-        )
+         await prisma.user.update({
+            where : {
+                id : user_id
+            },
+            data : {
+                name : name
+            }
+        })
 
         res.status(200).json({
-            success : true,
-            message : "User name updated successfully ",
+          success : true,
+          message : "User updated successfully"
         })
     } catch (error) {
            if (error instanceof Error) {
@@ -328,33 +352,26 @@ export const googleCallback = async (
             picture: payload.picture,
         });
 
-        // 4. Find existing Google user
-        const existingUser = await pool.query<User>(
-            `
-            SELECT *
-            FROM users
-            WHERE google_id = $1
-            `,
-            [googleUser.sub]
-        );
 
-        let user: User;
+        const existingUser = await prisma.user.findMany({
+            where : {
+                googleId : googleUser.sub
+            }
+        })
 
-        if (existingUser.rows.length > 0) {
-            user = existingUser.rows[0];
+        let user;
+
+        if (existingUser.length > 0) {
+            user = existingUser[0];
         } else {
 
-            // 5. Check if email already exists
-            const emailUser = await pool.query<User>(
-                `
-                SELECT *
-                FROM users
-                WHERE email = $1
-                `,
-                [googleUser.email]
-            );
+            const emailUser = await prisma.user.findMany({
+                where : {
+                    email : googleUser.email
+                }
+            })
 
-            if (emailUser.rows.length > 0) {
+            if (emailUser.length > 0) {
                 res.status(409).json({
                     success: false,
                     message:
@@ -363,31 +380,28 @@ export const googleCallback = async (
                 return;
             }
 
-            // 6. Create new user
-            const newUser = await pool.query<User>(
-                `
-                INSERT INTO users
-                    (
-                        name,
-                        email,
-                        password,
-                        google_id,
-                        auth_provider
-                    )
-                VALUES
-                    ($1, $2, $3, $4, $5)
-                RETURNING *
-                `,
-                [
-                    googleUser.name,
-                    googleUser.email,
-                    null,
-                    googleUser.sub,
-                    "google",
-                ]
-            );
+            const result = await prisma.$transaction(async (tx) => {
 
-            user = newUser.rows[0];
+              const newUser  = await tx.user.create({
+                data : {
+                  name : googleUser.name,
+                  email : googleUser.email,
+                  password : null,
+                  googleId : googleUser.sub,
+                  auth_provider : "google",
+                }
+              })
+
+              const newProfile = await tx.profile.create({
+                data : {
+                  userId : newUser.id,
+                  imageUrl : googleUser.picture || null
+                }
+              })
+              return {newUser, newProfile} ;
+            })
+
+            user = result.newUser;
 
             if (!user) {
                 res.status(500).json({
@@ -407,14 +421,14 @@ export const googleCallback = async (
         const refreshToken = generateRefreshToken(user.id);
 
         // 8. Store refresh token
-        await pool.query(
-            `
-            UPDATE users
-            SET refresh_token = $1
-            WHERE id = $2
-            `,
-            [refreshToken, user.id]
-        );
+        await prisma.user.update({
+            where : {
+                id : user.id
+            },
+            data : {
+                refreshTokens : refreshToken
+            }
+        });
 
         // 9. Safe user
         const safeUser: SafeUser = {
@@ -437,13 +451,16 @@ export const googleCallback = async (
             )
             .redirect("http://localhost:5173");
 
-    } catch (error) {
-        console.error(error);
+    } catch (error : any) {
+        console.error("GOOGLE AUTH ERROR:");
+    console.error(error);
+    console.error("Message:", error?.message);
+    console.error("Response:", error?.response?.data);
 
-        res.status(500).json({
-            success: false,
-            message: "Google authentication failed",
-        });
+    res.status(500).json({
+        success: false,
+        message: error?.message || "Google authentication failed",
+    });
     }
 };  
 

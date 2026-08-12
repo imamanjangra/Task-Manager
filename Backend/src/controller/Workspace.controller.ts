@@ -3,8 +3,8 @@ import {
   UpdateWorkSpaceBody,
   WorkspaceParamsBody,
 } from "../validators/workspace.validator.js";
-import { pool } from "../db/index.js";
 import { workspace } from "../types/workspace.types.js";
+import { prisma } from "../lib/prisma.js";
 
 
 export const CreateWorkspace = async (
@@ -13,17 +13,32 @@ export const CreateWorkspace = async (
 ): Promise<void> => {
   try {
     const { name, description } = req.body;
-    const user_id = req.user?.id;
+    const user_id = req.user?.id as string;
 
-    const result = await pool.query<workspace>(
-      `insert into workspaces (name , description  , owner_id) values ($1 , $2 , $3)  RETURNING *`,
-      [name, description, user_id],
-    );
-    await pool.query(`INSERT INTO workspace_members (workspace_id,user_id,role) VALUES ($1,$2,$3) RETURNING *` , [ result.rows[0]?.id , user_id , "owner"])
+const data = await prisma.$transaction(async (tx) => {
+
+  const result = await tx.workspaces.create({
+    data : {
+      name : name,
+      description : description,
+      ownerId : user_id
+    }
+  })
+
+  await tx.workspace_members.create({
+    data : {
+      workspaceId : result.id,
+      userId : user_id,
+      role : "OWNER"
+    }
+  })
+
+  return result;
+})
     res.status(200).json({
       success: true,
       message: "Workshpace created successfully",
-      workspace: result.rows[0],
+      workspace: data,
     });
   } catch (error) {
     if (error instanceof Error) {
@@ -44,31 +59,33 @@ export const UpdateWorkSpace = async (
     const user_id = req.user?.id;
     const id = req.params.id
 
-    const data = await pool.query(`select * from workspaces where id = $1 AND owner_id = $2`, [
-      id, user_id
-    ]);
+    const data = await prisma.workspaces.findFirst({
+      where : {
+        id : id,
+        ownerId : user_id
+      }
+    })
     
-    const workspaceId = data.rows[0].id;
-
-    if (!data.rows[0]) {
+    
+    if (!data) {
       res.status(404).json({
         success: false,
         message: "Workspace is not found",
       });
       return;
     }
+    
+    const workspaceId = data.id;
 
-    await pool.query(
-      `
-    UPDATE workspaces
-    SET
-        name = COALESCE($1, name),
-        description = COALESCE($2, description),
-        updated_at = CURRENT_TIMESTAMP
-    WHERE id = $3
-  `,
-      [name ?? null, description ?? null, workspaceId],
-    );
+  await prisma.workspaces.update({
+    where : {
+      id : workspaceId
+    },
+    data : {
+      name : name ?? data.name,
+      description : description ?? data.description
+    }
+  })
 
     res.status(200).json({
         success : true,
@@ -84,14 +101,17 @@ export const UpdateWorkSpace = async (
   }
 };
 
-
 export const GetAllWorkSpace = async (req : Request  , res : Response):Promise<void> => {
    try {
      const user_id = req.user?.id;
- 
-     const data = await pool.query(`select * from workspaces where owner_id = $1` , [user_id]);
- 
-     if(data.rowCount === 0){
+     
+    const data = await prisma.workspaces.findMany({
+      where : {
+        ownerId : user_id
+      }
+    })
+    
+     if(data.length === 0){
          res.status(404).json({
              success : false ,
              message : "Workspace is not found" 
@@ -103,7 +123,7 @@ export const GetAllWorkSpace = async (req : Request  , res : Response):Promise<v
      res.status(200).json({
          success : true ,
          message : "All workspaces are found",
-         Wrokspaces : data.rows
+         Wrokspaces : data
      })
    } catch (error) {
      if (error instanceof Error) {
@@ -119,9 +139,14 @@ export const getWorkspaceById = async (req :Request<WorkspaceParamsBody> , res :
     try {
         const Workspace_id = req.params.id;
          const user_id = req.user?.id;
-        const data  = await pool.query<WorkspaceParamsBody>(`select * from workspaces where id = $1 AND owner_id = $2` , [Workspace_id , user_id ]);
+      const data = await prisma.workspaces.findFirst({
+        where : {
+          id : Workspace_id,  
+          ownerId : user_id
+        }
+      })  
 
-        if(data.rowCount === 0){
+        if(data === null){
             res.status(404).json({
                 success : false,
                 message : "workspace is not found"
@@ -132,7 +157,7 @@ export const getWorkspaceById = async (req :Request<WorkspaceParamsBody> , res :
 
         res.status(200).json({
             success : true ,
-            workspace : data.rows[0]
+            workspace : data
         })
 
 
@@ -150,9 +175,15 @@ export const DeleteWorkspace = async (req : Request<WorkspaceParamsBody> , res :
     try {
          const Workspace_id = req.params.id;
          const user_id = req.user?.id;
-        const data  = await pool.query<WorkspaceParamsBody>(`select * from workspaces where id = $1 AND owner_id = $2` , [Workspace_id , user_id]);
 
-        if(data.rowCount === 0){
+      const data = await prisma.workspaces.findFirst({
+        where : {
+          id : Workspace_id,  
+          ownerId : user_id
+        }
+      })  
+
+        if(data === null){
             res.status(404).json({
                 success : false,
                 message : "workspace is not found"
@@ -161,7 +192,11 @@ export const DeleteWorkspace = async (req : Request<WorkspaceParamsBody> , res :
             return;
         }
 
-        await pool.query(`delete from workspaces where id = $1` , [Workspace_id])
+        await prisma.workspaces.delete({
+            where : {
+                id : Workspace_id
+            }
+        })
 
         res.status(200).json({
             success : true ,

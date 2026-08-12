@@ -1,6 +1,4 @@
-
-
-import { pool } from "../db/index.js";
+import { prisma } from "../lib/prisma.js";
 import { checkBoardPermission } from "./boardPermission.js";
 
 export const checkCardPermission = async (
@@ -8,26 +6,28 @@ export const checkCardPermission = async (
   user_id: string,
 ) => {
 
-  const cardResult = await pool.query(
-    `SELECT *
-     FROM cards
-     WHERE id = $1`,
-    [card_id]
-  );
+  const cardResult = await prisma.cards.findFirst({
+    where : {
+      id : card_id
+    },
+    include : {
+      list : {
+        select : {
+          boardId : true
+        }
+      }
+    }
+  })
 
-  if (cardResult.rowCount === 0) {
+  if (!cardResult) {
     throw new Error("card not found");
   }
   
-
-  const board_id  = cardResult.rows[0].board_id; 
-
    await checkBoardPermission(
-      board_id,
+      cardResult.list.boardId,
       user_id!,
-      ["owner", "admin", "member"]
+      ["OWNER", "ADMIN", "USER"]
     );
 
-    
 
 };
