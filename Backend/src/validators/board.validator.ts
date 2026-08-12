@@ -8,7 +8,12 @@ export const boardSchema = z.object({
 
     description : z
         .string()
-        .max(1000 , "description is too much high")
+        .max(1000 , "description is too much high"),
+
+    image_url : z
+        .string()
+        .url("image_url must be a valid url")
+        .optional()
 }).strict();
 
 export const boardParamSchema = z.object({

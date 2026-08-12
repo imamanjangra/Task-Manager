@@ -18,6 +18,13 @@ import {
 import { googleClient } from "../config/google.js";
 import { env } from "../validators/env.validator.js";
 import { GoogleUserSchema } from "../validators/google.validator.js";
+import jwt, { type JwtPayload } from "jsonwebtoken";
+
+
+
+interface RefreshTokenPayload {
+  id: string;
+} 
 
 export const createUser = async (
   req: Request<{}, {}, RegisterBody>,
@@ -464,3 +471,79 @@ export const googleCallback = async (
     }
 };  
 
+
+export const refreshAccessToken = async (
+  req: Request,
+  res: Response
+): Promise<void> => {
+  try {
+    const refreshToken = req.cookies.refreshToken;
+
+    if (!refreshToken) {
+      res.status(401).json({
+        success: false,
+        message: "Refresh token missing",
+      });
+      return;
+    }
+
+    let decoded: RefreshTokenPayload;
+
+    try {
+      decoded = jwt.verify(
+        refreshToken,
+        env.REFRESH_TOKEN_SECRET
+      ) as RefreshTokenPayload;
+    } catch {
+      res.status(401).json({
+        success: false,
+        message: "Invalid refresh token",
+      });
+      return;
+    }
+
+    const result = await prisma.user.findMany({
+      where : {
+        id : decoded.id
+      }
+    })
+
+    if (result.length === 0) {
+      res.status(404).json({
+        success: false,
+        message: "User not found",
+      });
+      return;
+    }
+
+    const user = result[0];
+
+    if (user.refreshTokens !== refreshToken) {
+      res.status(401).json({
+        success: false,
+        message: "Refresh token mismatch",
+      });
+      return;
+    }
+
+    const accessToken = generateAccessToken(
+      user.id,
+      user.email
+    );
+
+    res
+      .cookie("accessToken", accessToken, accessTokenOptions)
+      .status(200)
+      .json({
+        success: true,
+        accessToken,
+      });
+  } catch (error) {
+    console.error(error);
+
+    res.status(500).json({
+      success: false,
+      message: "Internal Server Error",
+    });
+  }
+};

@@ -105,13 +105,42 @@ export const GetAllWorkSpace = async (req : Request  , res : Response):Promise<v
    try {
      const user_id = req.user?.id;
      
-    const data = await prisma.workspaces.findMany({
+    const workspaces = await prisma.workspaces.findMany({
       where : {
-        ownerId : user_id
+        workspace_members : {
+          some : {
+            userId : user_id
+          }
+        }
+      },
+
+      include : {
+        _count : {
+          select : {
+            workspace_members : true,
+            boards : true
+          }
+        }
       }
     })
+
+//     const data = {
+
+//   totalWorkspaces: workspaces.length,
+
+//   workspaces: workspaces.map((workspace) => ({
+//     id: workspace.id,
+//     name: workspace.name,
+//     description: workspace.description,
+
+//     memberCount: workspace._count.workspace_members,
+//     boardCount: workspace._count.boards,
+//   })),
+// };
+
     
-     if(data.length === 0){
+    
+     if(workspaces.length === 0){
          res.status(404).json({
              success : false ,
              message : "Workspace is not found" 
@@ -120,11 +149,18 @@ export const GetAllWorkSpace = async (req : Request  , res : Response):Promise<v
  
      }
  
-     res.status(200).json({
-         success : true ,
-         message : "All workspaces are found",
-         Wrokspaces : data
-     })
+    res.status(200).json({
+  success: true,
+  message: "All workspaces found",
+  totalWorkspaces: workspaces.length,
+  workspaces: workspaces.map((workspace) => ({
+    id: workspace.id,
+    name: workspace.name,
+    description: workspace.description,
+    memberCount: workspace._count.workspace_members,
+    boardCount: workspace._count.boards,
+  })),
+});
    } catch (error) {
      if (error instanceof Error) {
       console.log(error.message);
@@ -141,8 +177,20 @@ export const getWorkspaceById = async (req :Request<WorkspaceParamsBody> , res :
          const user_id = req.user?.id;
       const data = await prisma.workspaces.findFirst({
         where : {
-          id : Workspace_id,  
-          ownerId : user_id
+          workspace_members : {
+            some : {
+              userId : user_id,
+              workspaceId : Workspace_id
+            }
+          }
+        },
+        include : {
+          _count : {
+            select : {
+              boards : true,
+              workspace_members : true
+            }
+          }
         }
       })  
 
@@ -157,7 +205,13 @@ export const getWorkspaceById = async (req :Request<WorkspaceParamsBody> , res :
 
         res.status(200).json({
             success : true ,
-            workspace : data
+            workspaces : {
+                id : data.id,
+                name : data.name,
+                description : data.description,
+                memberCount : data._count.workspace_members,
+                boardCount : data._count.boards
+            }
         })
 
 

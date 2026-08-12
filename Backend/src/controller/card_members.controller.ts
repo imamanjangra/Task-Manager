@@ -116,6 +116,25 @@ export const AssignedMember = async (req : Request<ListIdBody> , res : Response)
     const data = await prisma.card_members.findMany({
         where : {
             cardId : card_id
+        },
+        include : {
+            user : {
+                select : {
+                    id : true,
+                    name : true,
+                    email : true,
+                }
+            },
+
+            card : {
+                select : {
+                    id : true,
+                    name : true,
+                    description : true,
+                    dueDate : true,
+                    iscompleted : true,
+                }
+            }
         }
     })
 

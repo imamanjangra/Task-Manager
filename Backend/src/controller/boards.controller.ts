@@ -13,7 +13,7 @@ export const createBoard = async (
   res: Response,
 ): Promise<void> => {
   try {
-    const { name, description } = req.body;
+    const { name, description , image_url } = req.body;
     const workspace_id = req.params.workspace_id;
     const user_id = req.user?.id;
 
@@ -61,7 +61,8 @@ export const createBoard = async (
         workspaceId : workspace_id,
         name : name,
         description : description,
-        createdBy : user_id!
+        createdBy : user_id!,
+        image_url : image_url ?? undefined
       }
     })
     
