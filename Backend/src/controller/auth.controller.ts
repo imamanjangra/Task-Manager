@@ -26,6 +26,10 @@ interface RefreshTokenPayload {
   id: string;
 } 
 
+
+interface RefreshTokenPayload {
+  id: number;
+} 
 export const createUser = async (
   req: Request<{}, {}, RegisterBody>,
   res: Response,
@@ -157,7 +161,7 @@ export const Login = async (
       return;
     }
 
-    const isMatch = bcrypt.compare(password, user.password);
+    const isMatch = await bcrypt.compare(password, user.password);
 
     if (!isMatch) {
        res.status(401).json({
@@ -194,7 +198,7 @@ export const Login = async (
         success: true,
         message: "Login successful",
         user: safeUser,
-        accessToken
+        // accessToken
       });
       return;
   } catch (error) {
